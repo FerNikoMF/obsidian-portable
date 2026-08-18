@@ -1,0 +1,26 @@
+# Rust artifacts
+/target/
+**/*.rs.bk
+**/*.rs.orig
+Cargo.lock
+
+# Visual Studio Code
+.vscode/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Obsidian Portable artifacts
+obsidian-portable/
+*.asar
