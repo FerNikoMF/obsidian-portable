@@ -1,6 +1,6 @@
 [package]
 name         = "obsidian-portable"
-version      = "1.0.0"
+version      = "2.0.0"
 edition      = "2021"
 description  = "Portable launcher and auto-updater for Obsidian"
 repository   = "https://github.com/FerNikoMF/Obsidian-Portable"
