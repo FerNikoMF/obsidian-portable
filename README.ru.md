@@ -37,6 +37,7 @@ ObsidianPortable/
 ├── obsidian-portable.exe ← запускает Obsidian (или updater если не установлен)
 ├── Obsidian Updater.lnk  ← ярлык для апдейтера (создаётся автоматически)
 ├── GitHub.url            ← ссылка на этот репозиторий
+├── lang.pref             ← сохранённый язык интерфейса (создаётся при смене языка)
 ├── App/
 │   └── Obsidian.exe      ← ядро Obsidian (распаковывается сюда)
 └── Data/
@@ -50,6 +51,7 @@ ObsidianPortable/
 | Запустить Obsidian | `obsidian-portable.exe` |
 | Открыть апдейтер | `obsidian-portable.exe --updater` или `Obsidian Updater.lnk` |
 | Первая установка | `obsidian-portable.exe` сам откроет апдейтер |
+| Сменить язык | Нажмите кнопку **EN / RU** в футере апдейтера |
 
 ## Сборка из исходников
 
@@ -60,7 +62,10 @@ git clone https://github.com/FerNikoMF/Obsidian-Portable
 cd Obsidian-Portable
 
 cargo build --release
-# Бинарник: target/release/launcher.exe
+# Бинарник: target/release/obsidian-portable.exe
+
+cargo test
+# Запускает unit-тесты (нормализация версий, i18n, поиск файлов)
 ```
 
 Внешние бинарники не нужны — всё необходимое собирается из crates.
@@ -72,7 +77,7 @@ cargo build --release
 | `eframe` / `egui` | GUI |
 | `reqwest` | HTTP-загрузка |
 | `serde` | парсинг JSON (GitHub API) |
-| `sevenz-rust` | распаковка `app-64.7z` в `App/` |
+| `sevenz-rust2` | распаковка `app-64.7z` в `App/` |
 | `nsis` | парсинг и распаковка NSIS-инсталлятора |
 | `pelite` | чтение версии из PE-ресурса `Obsidian.exe` |
 | `mslnk` | создание ярлыка `Obsidian Updater.lnk` |

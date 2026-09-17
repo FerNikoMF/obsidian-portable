@@ -3,9 +3,7 @@ use std::fs;
 
 use mslnk::ShellLink;
 
-use crate::utils::exe_dir;
-
-const GITHUB_URL: &str = "https://github.com/FerNikoMF/Obsidian-Portable";
+use crate::utils::{exe_dir, GITHUB_URL};
 
 /// Runs only once — the presence of `Obsidian Updater.lnk` is the marker.
 /// No extra `.initialized` file is created.

@@ -38,6 +38,7 @@ ObsidianPortable/
 ├── obsidian-portable.exe ← launches Obsidian (or updater if not installed)
 ├── Obsidian Updater.lnk  ← updater shortcut (created automatically)
 ├── GitHub.url            ← link to this repository
+├── lang.pref             ← saved UI language (created on first toggle)
 ├── App/
 │   └── Obsidian.exe      ← Obsidian core (unpacked here)
 └── Data/
@@ -51,6 +52,7 @@ ObsidianPortable/
 | Launch Obsidian | `obsidian-portable.exe` |
 | Open updater | `obsidian-portable.exe --updater` or `Obsidian Updater.lnk` |
 | First install | `obsidian-portable.exe` will open the updater automatically |
+| Switch language | Click the **EN / RU** button in the updater footer |
 
 ## Building from source
 
@@ -62,6 +64,9 @@ cd Obsidian-Portable
 
 cargo build --release
 # Output: target/release/obsidian-portable.exe
+
+cargo test
+# Runs the unit tests (version normalisation, i18n, file search)
 ```
 
 No external binaries are required — everything is pulled in from crates at build time.
@@ -73,7 +78,7 @@ No external binaries are required — everything is pulled in from crates at bui
 | `eframe` / `egui` | GUI |
 | `reqwest` | HTTP download |
 | `serde` | JSON parsing (GitHub API) |
-| `sevenz-rust` | unpack `app-64.7z` into `App/` |
+| `sevenz-rust2` | unpack `app-64.7z` into `App/` |
 | `nsis` | parse and unpack the NSIS installer |
 | `pelite` | read Obsidian.exe version from its PE resource |
 | `mslnk` | create the `Obsidian Updater.lnk` shortcut |

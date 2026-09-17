@@ -6,6 +6,7 @@ Cargo.lock
 
 # Visual Studio Code
 .vscode/
+.dsh-project-memory
 
 # Logs
 *.log
@@ -24,3 +25,4 @@ Thumbs.db
 # Obsidian Portable artifacts
 obsidian-portable/
 *.asar
+lang.pref

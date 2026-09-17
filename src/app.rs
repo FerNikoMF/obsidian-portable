@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::os::windows::process::CommandExt;
@@ -9,7 +10,7 @@ use crate::github::Release;
 use crate::i18n::{self, Lang};
 use crate::utils::{
     installed_version, normalize_version,
-    obsidian_data_dir, obsidian_exe, user_data_arg, DETACHED_PROCESS,
+    obsidian_data_dir, obsidian_exe, user_data_arg, DETACHED_PROCESS, GITHUB_URL,
 };
 use crate::updater;
 
@@ -24,8 +25,6 @@ const MUTED:       Color32 = Color32::from_rgb(0x9a, 0x99, 0xad);
 const GREEN:       Color32 = Color32::from_rgb(0x9c, 0xce, 0x9c);
 const RED:         Color32 = Color32::from_rgb(0xf0, 0x8a, 0xa6);
 const YELLOW:      Color32 = Color32::from_rgb(0xf2, 0xd9, 0x8c);
-
-const GITHUB_URL: &str = "https://github.com/FerNikoMF/Obsidian-Portable";
 
 const PURPLE_HOVER:  Color32 = Color32::from_rgb(0x8b, 0x5c, 0xf6);
 const SURFACE2_HOVER: Color32 = Color32::from_rgb(0x32, 0x31, 0x40);
@@ -47,6 +46,7 @@ pub struct AppState {
     pub installed: Option<String>,
     pub available: String,
     pub release:   Option<Release>,
+    pub cancel:    Arc<AtomicBool>,
 }
 
 // ── View enum — derived each frame ───────────────────────────────────────────
@@ -93,49 +93,66 @@ impl UpdaterApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         apply_theme(&cc.egui_ctx);
 
+        let lang = Lang::load();
+        let t = i18n::get(lang);
+
         let state = Arc::new(Mutex::new(AppState {
             running:   false,
-            status:    i18n::get(Lang::En).checking.to_owned(),
+            status:    t.checking.clone(),
             progress:  0.0,
             speed:     String::new(),
             success:   None,
             installed: installed_version(),
             available: String::new(),
             release:   None,
+            cancel:    Arc::new(AtomicBool::new(false)),
         }));
 
         let sc  = Arc::clone(&state);
         let ctx = cc.egui_ctx.clone();
+        let t_fetch_err = t.err_fetch.clone();
         thread::spawn(move || {
             match crate::github::fetch_latest() {
                 Ok(r) => {
+                    // Check if this release has an x64 installer; if not, search older releases
+                    let (_asset, used_release) = match crate::updater::find_x64_asset_public(&r) {
+                        Ok(pair) => pair,
+                        Err(_) => {
+                            // No x64 found anywhere — show latest tag but mark as unavailable
+                            let mut s = sc.lock().unwrap();
+                            s.available = r.tag_name.clone();
+                            s.release   = Some(r);
+                            ctx.request_repaint();
+                            return;
+                        }
+                    };
                     let mut s = sc.lock().unwrap();
-                    s.available = r.tag_name.clone();
-                    s.release   = Some(r);
+                    s.available = used_release.tag_name.clone();
+                    s.release   = Some(used_release);
                 }
                 Err(e) => {
                     let mut s = sc.lock().unwrap();
                     s.available = "–".to_owned();
-                    s.status    = format!("{}: {e}", i18n::get(Lang::En).err_fetch);
+                    s.status    = format!("{t_fetch_err}: {e}");
                     s.success   = Some(false);
                 }
             }
             ctx.request_repaint();
         });
-
-        Self { state, lang: Lang::load() }
+        Self { state, lang }
     }
 }
 
 impl eframe::App for UpdaterApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         if self.state.lock().unwrap().running { ctx.request_repaint(); }
 
         let t = i18n::get(self.lang);
 
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(BG).inner_margin(0.0))
-            .show(ctx, |ui| {
+            .show(ui, |ui| {
                         draw_header(ui, &t);
 
                 egui::Frame::new()
@@ -161,8 +178,8 @@ impl eframe::App for UpdaterApp {
                                     ver_row(ui, &t.available, &avail, GREEN);
                                 });
                                 ui.add_space(10.0);
-                                if action_btn(ui, ctx, "⬇", &t.btn_install, PURPLE, PURPLE_HOVER) {
-                                    start_install(&mut s, &self.state, ctx, &t.step_prepare);
+                                if action_btn(ui, &ctx, "⬇", &t.btn_install, PURPLE, PURPLE_HOVER) {
+                                    start_install(&mut s, &self.state, &ctx, &t.step_prepare);
                                 }
                             }
 
@@ -179,11 +196,11 @@ impl eframe::App for UpdaterApp {
                                     });
                                 });
                                 ui.add_space(10.0);
-                                if action_btn(ui, ctx, "↻", &t.btn_reinstall, SURFACE2, SURFACE2_HOVER) {
-                                    start_install(&mut s, &self.state, ctx, &t.step_prepare);
+                                if action_btn(ui, &ctx, "↻", &t.btn_reinstall, SURFACE2, SURFACE2_HOVER) {
+                                    start_install(&mut s, &self.state, &ctx, &t.step_prepare);
                                 }
                                 ui.add_space(6.0);
-                                launch_btn(ui, ctx, "▶", &t.btn_launch);
+                                launch_btn(ui, &ctx, "▶", &t.btn_launch);
                             }
 
                             View::UpdateReady { installed, available } => {
@@ -203,13 +220,17 @@ impl eframe::App for UpdaterApp {
                                     });
                                 });
                                 ui.add_space(10.0);
-                                if action_btn(ui, ctx, "⬆", &format!("{} {}", t.btn_update, avail), PURPLE, PURPLE_HOVER) {
-                                    start_install(&mut s, &self.state, ctx, &t.step_prepare);
+                                if action_btn(ui, &ctx, "⬆", &format!("{} {}", t.btn_update, avail), PURPLE, PURPLE_HOVER) {
+                                    start_install(&mut s, &self.state, &ctx, &t.step_prepare);
                                 }
                             }
 
                             View::Installing => {
-                                progress_button(ui, ctx, s.progress, &s.status, &s.speed, &t.mib_s);
+                                progress_button(ui, &ctx, s.progress, &s.status, &s.speed, &t.mib_s);
+                                ui.add_space(6.0);
+                                if action_btn(ui, &ctx, "✖", &t.btn_cancel, RED, Color32::from_rgb(0xf5, 0x6b, 0x8a)) {
+                                    s.cancel.store(true, Ordering::Relaxed);
+                                }
                             }
 
                             View::Done { version } => {
@@ -225,7 +246,7 @@ impl eframe::App for UpdaterApp {
                                     });
                                 });
                                 ui.add_space(10.0);
-                                launch_btn(ui, ctx, "▶", &t.btn_launch);
+                                launch_btn(ui, &ctx, "▶", &t.btn_launch);
                             }
 
                             View::Failed(msg) => {
@@ -241,7 +262,7 @@ impl eframe::App for UpdaterApp {
                                     });
                                 });
                                 ui.add_space(10.0);
-                                if action_btn(ui, ctx, "↻", &t.btn_retry, SURFACE2, SURFACE2_HOVER) {
+                                if action_btn(ui, &ctx, "↻", &t.btn_retry, SURFACE2, SURFACE2_HOVER) {
                                     s.success  = None;
                                     s.status.clear();
                                     s.progress = 0.0;
@@ -252,7 +273,10 @@ impl eframe::App for UpdaterApp {
 
                 let remaining = ui.available_height();
                 if remaining > 32.0 { ui.add_space(remaining - 32.0); }
-                draw_footer(ui, &t.footer_link);
+                if let Some(new_lang) = draw_footer(ui, &t.footer_link, self.lang) {
+                    self.lang = new_lang;
+                    new_lang.save();
+                }
             });
     }
 }
@@ -265,16 +289,25 @@ fn start_install(s: &mut AppState, state: &Arc<Mutex<AppState>>, ctx: &egui::Con
     s.progress = 0.0;
     s.speed.clear();
     s.status   = step.to_owned();
+    s.cancel.store(false, Ordering::Relaxed);
 
     let sc  = Arc::clone(state);
-    let ctx = ctx.clone();
+    let ctx_clone = ctx.clone();
+    let cancel = Arc::clone(&s.cancel);
     thread::spawn(move || {
-        if let Err(e) = updater::run(&sc, &ctx) {
+        if let Err(e) = updater::run(&sc, &ctx_clone, &cancel) {
             let mut s = sc.lock().unwrap();
-            s.status  = e.to_string();
+            if e.to_string() == "Cancelled" {
+                s.status = "Cancelled".to_owned();
+            } else {
+                s.status  = e.to_string();
+            }
             s.success = Some(false);
             s.running = false;
-            ctx.request_repaint();
+            ctx_clone.request_repaint();
+        } else {
+            // Auto-launch after successful install
+            launch_obsidian(&ctx_clone);
         }
     });
 }
@@ -347,7 +380,8 @@ fn draw_logo(ui: &mut egui::Ui) {
     ));
 }
 
-fn draw_footer(ui: &mut egui::Ui, link_label: &str) {
+fn draw_footer(ui: &mut egui::Ui, link_label: &str, lang: Lang) -> Option<Lang> {
+    let mut new_lang = None;
     egui::Frame::new()
         .fill(SURFACE)
         .inner_margin(egui::Margin::symmetric(18, 9))
@@ -361,8 +395,23 @@ fn draw_footer(ui: &mut egui::Ui, link_label: &str) {
                     RichText::new(link_label).color(MUTED).size(11.0),
                     GITHUB_URL,
                 );
+
+                // Language toggle: shows the code of the language you'd switch to.
+                let other = lang.toggled();
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let btn = ui.add(
+                        egui::Button::new(
+                            RichText::new(other.code().to_uppercase()).color(MUTED).size(11.0),
+                        )
+                        .frame(false),
+                    );
+                    if btn.clicked() {
+                        new_lang = Some(other);
+                    }
+                });
             });
         });
+    new_lang
 }
 
 fn info_card(ui: &mut egui::Ui, fill: Color32, border: Color32, f: impl FnOnce(&mut egui::Ui)) {
@@ -477,10 +526,7 @@ fn apply_theme(ctx: &egui::Context) {
     };
     ctx.set_visuals(vis);
 
-    let mut style = (*ctx.style()).clone();
-    style.spacing.item_spacing  = Vec2::new(10.0, 6.0);
-    style.spacing.window_margin = egui::Margin::same(0);
-    ctx.set_style(style);
+    ctx.set_theme(egui::Theme::Dark);
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────

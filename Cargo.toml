@@ -1,20 +1,24 @@
 [package]
 name         = "obsidian-portable"
-version      = "2.0.0"
+version      = "2.1.0"
 edition      = "2021"
 description  = "Portable launcher and auto-updater for Obsidian"
 repository   = "https://github.com/FerNikoMF/Obsidian-Portable"
 license      = "GPL-3.0"
 
 [dependencies]
-eframe      = "0.31"
-reqwest     = { version = "0.13", features = ["blocking", "json"] }
+eframe      = { version = "0.36.2", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+reqwest     = { version = "0.13.5", features = ["blocking", "json"] }
 serde       = { version = "1",    features = ["derive"] }
 serde_json  = "1"
-sevenz-rust = "0.6"
-nsis        = "0.3"
-mslnk       = "0.1"
-pelite      = "0.10"
+sevenz-rust2 = "0.22.2"
+nsis        = "0.4.1"
+mslnk       = "0.1.1"
+pelite      = "0.10.0"
+sha2        = "0.11.0"
+tracing     = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender   = "0.2"
 
 [build-dependencies]
 winres = "0.1"
