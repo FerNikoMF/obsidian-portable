@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/obsidian-icon.ico" width="72" alt="Obsidian Portable icon" />
+<img src="assets/png.jpg" width="72" alt="Obsidian Portable icon" />
 
 # Obsidian Portable
 
